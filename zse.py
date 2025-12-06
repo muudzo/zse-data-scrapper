@@ -16,4 +16,19 @@ class ZSEScraper:
         
     def fetch_homepage(self)-> str:
         #fetch zse homepage html content
-       try:
+        try:
+            response = requests.get(self.base_url, headers=self.headers)
+            response.raise_for_status()
+            return response.text
+        except requests.RequestException as e:
+            print(f"Error fetching homepage: {e}")
+            return ""
+
+if __name__ == "__main__":
+    scraper = ZSEScraper()
+    html = scraper.fetch_homepage()
+    if html:
+        print("Successfully fetched homepage")
+        print(f"Content length: {len(html)} characters")
+    else:
+        print("Failed to fetch homepage")
