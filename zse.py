@@ -164,3 +164,81 @@ def scrape_etfs(self, soup: BeautifulSoup) -> List[Dict]:
         
         if not activity_section:
             return {}
+        
+        # Find the date in the heading
+        date_str = None
+        if activity_section:
+            date_text = activity_section.get_text()
+            # Extract date (format: "MARKET ACTIVITY 05 DEC 2025")
+            parts = date_text.split()
+            if len(parts) >= 4:
+                date_str = ' '.join(parts[-3:])
+        
+        # Find the table with market stats
+        table = activity_section.find_next('table')
+        if not table:
+            return {}
+        
+        activity = {'trade_date': date_str}
+        
+        # Parse key-value pairs from the table
+        for row in table.find_all('tr'):
+            cols = row.find_all('td')
+            if len(cols) == 2:
+                key = cols[0].get_text().strip().rstrip(':')
+                value = cols[1].get_text().strip()
+                
+                if 'Trades' in key:
+                    activity['trades_count'] = self.clean_numeric(value)
+                elif 'Turnover' in key:
+                    activity['turnover'] = self.clean_numeric(value)
+                elif 'Market Cap' in key:
+                    activity['market_cap'] = self.clean_numeric(value)
+                elif 'Foreign Purchases' in key:
+                    activity['foreign_purchases'] = self.clean_numeric(value)
+                elif 'Foreign Sales' in key:
+                    activity['foreign_sales'] = self.clean_numeric(value)
+        
+        return activity
+    
+    def scrape_all(self) -> Dict:
+        """Scrape all data from homepage"""
+        html = self.fetch_homepage()
+        if not html:
+            return None
+        
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        data = {
+            'scraped_at': datetime.now().isoformat(),
+            'source': self.base_url,
+            'top_gainers': self.scrape_top_gainers(soup),
+            'top_losers': self.scrape_top_losers(soup),
+            'market_indices': self.scrape_market_indices(soup),
+            'sector_indices': self.scrape_sector_indices(soup),
+            'etfs': self.scrape_etfs(soup),
+            'reits': self.scrape_reits(soup),
+            'market_activity': self.scrape_market_activity(soup)
+        }
+        
+        return data
+
+
+# Example usage
+if __name__ == "__main__":
+    scraper = ZSEScraper()
+    data = scraper.scrape_all()
+    
+    if data:
+        print(json.dumps(data, indent=2))
+        
+        # Summary statistics
+        print(f"\n=== Scrape Summary ===")
+        print(f"Top Gainers: {len(data['top_gainers'])}")
+        print(f"Top Losers: {len(data['top_losers'])}")
+        print(f"Market Indices: {len(data['market_indices'])}")
+        print(f"Sector Indices: {len(data['sector_indices'])}")
+        print(f"ETFs: {len(data['etfs'])}")
+        print(f"REITs: {len(data['reits'])}")
+    else:
+        print("Failed to scrape data")
