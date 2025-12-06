@@ -71,3 +71,31 @@ class ZSEScraper:
             return float(cleaned)
         except ValueError:
             return None
+
+    def scrape_top_gainers(self, soup: BeautifulSoup) -> List[Dict]:
+        #Scrape top gainers table
+        gainers = self.parse_table(soup, "TOP GAINERS")
+        
+        result = []
+        for item in gainers:
+            result.append({
+                'symbol': item.get('SYMBOL', '').replace('.zw', ''),
+                'price': self.clean_numeric(item.get('VALUE (ZWG cents)', '')),
+                'change_pct': self.clean_numeric(item.get('CHANGE', '')),
+                'currency': 'ZWG'
+            })
+        return result
+    
+    def scrape_top_losers(self, soup: BeautifulSoup) -> List[Dict]:
+        #Scrape top losers table
+        losers = self.parse_table(soup, "TOP LOSERS")
+        
+        result = []
+        for item in losers:
+            result.append({
+                'symbol': item.get('SYMBOL', '').replace('.zw', ''),
+                'price': self.clean_numeric(item.get('VALUE (ZWG Cents)', '')),
+                'change_pct': self.clean_numeric(item.get('CHANGE', '')),
+                'currency': 'ZWG'
+            })
+        return result
