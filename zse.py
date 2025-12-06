@@ -99,3 +99,30 @@ class ZSEScraper:
                 'currency': 'ZWG'
             })
         return result
+    
+
+def scrape_market_indices(self, soup: BeautifulSoup) -> List[Dict]:
+        #Scrape market cap indices
+        indices = self.parse_table(soup, "ZSE MARKET CAP INDICES")
+        
+        result = []
+        for item in indices:
+            result.append({
+                'name': item.get('INDEX', ''),
+                'value': self.clean_numeric(item.get('VALUE', '')),
+                'change_pct': self.clean_numeric(item.get('CHANGE', ''))
+            })
+        return result
+    
+    def scrape_sector_indices(self, soup: BeautifulSoup) -> List[Dict]:
+        #Scrape sector indices
+        sectors = self.parse_table(soup, "ZSE SECTOR INDICES")
+        
+        result = []
+        for item in sectors:
+            result.append({
+                'name': item.get('INDEX', ''),
+                'value': self.clean_numeric(item.get('VALUE', '')),
+                'change_pct': self.clean_numeric(item.get('CHANGE', ''))
+            })
+        return result
