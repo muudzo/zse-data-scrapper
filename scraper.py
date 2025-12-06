@@ -100,8 +100,7 @@ class ZSEScraper:
             })
         return result
     
-
-def scrape_market_indices(self, soup: BeautifulSoup) -> List[Dict]:
+    def scrape_market_indices(self, soup: BeautifulSoup) -> List[Dict]:
         #Scrape market cap indices
         indices = self.parse_table(soup, "ZSE MARKET CAP INDICES")
         
@@ -127,7 +126,7 @@ def scrape_market_indices(self, soup: BeautifulSoup) -> List[Dict]:
             })
         return result
 
-def scrape_etfs(self, soup: BeautifulSoup) -> List[Dict]:
+    def scrape_etfs(self, soup: BeautifulSoup) -> List[Dict]:
         #Scrape Exchange Traded Funds
         etfs = self.parse_table(soup, "EXCHANGE TRADED FUNDS")
         
