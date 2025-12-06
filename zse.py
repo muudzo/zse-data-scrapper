@@ -126,3 +126,41 @@ def scrape_market_indices(self, soup: BeautifulSoup) -> List[Dict]:
                 'change_pct': self.clean_numeric(item.get('CHANGE', ''))
             })
         return result
+
+def scrape_etfs(self, soup: BeautifulSoup) -> List[Dict]:
+        #Scrape Exchange Traded Funds
+        etfs = self.parse_table(soup, "EXCHANGE TRADED FUNDS")
+        
+        result = []
+        for item in etfs:
+            result.append({
+                'symbol': item.get('SECURITY', '').replace('.zw', ''),
+                'price': self.clean_numeric(item.get('PRICE (ZWG Cents)', '')),
+                'change_pct': self.clean_numeric(item.get('CHANGE', '')),
+                'market_cap': self.clean_numeric(item.get('MARKET CAP (ZWG)', '')),
+                'currency': 'ZWG'
+            })
+        return result
+    
+    def scrape_reits(self, soup: BeautifulSoup) -> List[Dict]:
+        #Scrape Real Estate Investment Trusts
+        reits = self.parse_table(soup, "REAL ESTATE INVESTMENT TRUST")
+        
+        result = []
+        for item in reits:
+            result.append({
+                'symbol': item.get('SECURITY', '').replace('.zw', ''),
+                'price': self.clean_numeric(item.get('PRICE (ZWG Cents)', '')),
+                'change_pct': self.clean_numeric(item.get('CHANGE', '')),
+                'market_cap': self.clean_numeric(item.get('MARKET CAP (ZWG)', '')),
+                'currency': 'ZWG'
+            })
+        return result
+    
+    def scrape_market_activity(self, soup: BeautifulSoup) -> Dict:
+        #Scrape market activity summary
+        activity_section = soup.find(lambda tag: tag.name in ['h4', 'h3'] and 
+                                     'MARKET ACTIVITY' in tag.get_text().upper())
+        
+        if not activity_section:
+            return {}
