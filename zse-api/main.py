@@ -15,6 +15,13 @@ from psycopg2.extras import RealDictCursor
 import os
 import hashlib
 
+# Load env variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # ============================================================================
 # Configuration
 # ============================================================================

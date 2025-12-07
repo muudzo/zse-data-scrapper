@@ -1,8 +1,3 @@
-"""
-ZSE Scraper with Database Storage
-Scrapes ZSE homepage and stores data in PostgreSQL
-"""
-
 import psycopg2
 from psycopg2.extras import Json
 from datetime import datetime, date
@@ -11,9 +6,15 @@ import sys
 import json
 
 # Import the scraper
-from app.scraper import ZSEScraper
+from scraper import ZSEScraper
 
 # Construct Database URL from environment variables
+# If running locally, load .env
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
 DB_PASS = os.getenv("POSTGRES_PASSWORD", "postgres")
 DB_HOST = os.getenv("POSTGRES_HOST", "localhost")

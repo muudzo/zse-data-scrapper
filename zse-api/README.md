@@ -1,4 +1,4 @@
-# ZSE Data Ingestion API
+# ZSE Market Data API
 
 A complete pipeline to scrape Zimbabwe Stock Exchange (ZSE) data, store it in PostgreSQL, and serve it via a secured FastAPI.
 
@@ -28,7 +28,7 @@ pip install -r requirements.txt
 The database schema is automatically applied by Docker on the first run. 
 If you need to re-apply it manually (e.g. after schema changes):
 ```bash
-psql -h localhost -U postgres -d zse_db -f schema.sql
+psql -h localhost -U postgres -d zse_db -f database_schema.sql
 ```
 
 ## Usage
@@ -42,24 +42,20 @@ python admin.py create user@example.com free
 # List all keys
 python admin.py list
 ```
-**Old method (dev only):**
-```bash
-python -m app.seed_key
-```
 
 ### 2. Run Scraper Manually
 Trigger an immediate scrape and update:
 ```bash
-python -m app.runner --now
+python scraper_db.py
 ```
 
 ### 3. Run API
 Start the FastAPI server:
 ```bash
-uvicorn app.api:app --reload
+uvicorn main:app --reload
 ```
 - **API Docs**: http://127.0.0.1:8000/docs
-- **Authorize**: Click "Authorize" in Swagger UI and enter `test_key_123`.
+- **Authorize**: Click "Authorize" in Swagger UI and enter your API Key.
 
 #### Endpoints
 - `GET /api/v1/securities`: List securities.
@@ -70,9 +66,16 @@ uvicorn app.api:app --reload
 ### 4. Scheduler
 Run the scheduler daemon:
 ```bash
-python -m app.runner
+python scheduler.py
 ```
 
+## Deployment
+
+### Railway/Heroku
+Web and Worker processes are defined in `Procfile`.
+- **Web**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- **Worker**: `python scheduler.py`
+
 ## Development
-- **Logs**: Check `zse_scraper.log` for scraper details.
-- **Tests**: Run `pytest` (if added).
+- **Logs**: Check `zse_scraper.log` for details.
+- **Admin**: Use `admin.py` for key management.
