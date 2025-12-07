@@ -30,17 +30,17 @@ class ZSEDataPipeline:
         self.conn = None
     
     def connect(self):
-        """Connect to database"""
+        #Connect to database
         self.conn = psycopg2.connect(self.database_url)
         return self.conn
     
     def close(self):
-        """Close database connection"""
+        #Close database connection
         if self.conn:
             self.conn.close()
     
     def get_or_create_security(self, symbol: str, security_type: str = 'equity', cursor=None) -> int:
-        """Get security ID or create if doesn't exist"""
+        #Get security ID or create if doesn't exist
         if cursor is None:
             cursor = self.conn.cursor()
         
