@@ -1,7 +1,7 @@
 import os
 import time
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 from contextlib import contextmanager
 import logging
 
@@ -16,7 +16,7 @@ def get_db_connection():
     
     for attempt in range(max_retries):
         try:
-            conn = psycopg2.connect(
+            conn = psycopg.connect(
                 host=os.getenv("POSTGRES_HOST", "localhost"),
                 database=os.getenv("POSTGRES_DB", "zse_db"),
                 user=os.getenv("POSTGRES_USER", "postgres"),
@@ -24,7 +24,7 @@ def get_db_connection():
                 port=os.getenv("POSTGRES_PORT", "5432")
             )
             return conn
-        except psycopg2.OperationalError as e:
+        except psycopg.OperationalError as e:
             if attempt < max_retries - 1:
                 logger.warning(f"Database connection failed (attempt {attempt+1}/{max_retries}). Retrying in {retry_delay}s...")
                 time.sleep(retry_delay)

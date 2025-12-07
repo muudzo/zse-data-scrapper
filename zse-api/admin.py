@@ -3,7 +3,7 @@ ZSE API - Admin Key Management Script
 Generate and manage API keys
 """
 
-import psycopg2
+import psycopg
 import hashlib
 import secrets
 import os
@@ -55,7 +55,7 @@ class APIKeyManager:
         
         # Store in database
         try:
-            conn = psycopg2.connect(self.database_url)
+            conn = psycopg.connect(self.database_url)
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -106,7 +106,7 @@ Example usage:
     def list_keys(self):
         """List all API keys"""
         try:
-            conn = psycopg2.connect(self.database_url)
+            conn = psycopg.connect(self.database_url)
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -152,7 +152,7 @@ Example usage:
     def deactivate_key(self, key_id: int):
         """Deactivate an API key"""
         try:
-            conn = psycopg2.connect(self.database_url)
+            conn = psycopg.connect(self.database_url)
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -178,7 +178,7 @@ Example usage:
     def reactivate_key(self, key_id: int):
         """Reactivate an API key"""
         try:
-            conn = psycopg2.connect(self.database_url)
+            conn = psycopg.connect(self.database_url)
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -204,7 +204,7 @@ Example usage:
     def reset_daily_counters(self):
         """Reset daily request counters (run this daily via cron)"""
         try:
-            conn = psycopg2.connect(self.database_url)
+            conn = psycopg.connect(self.database_url)
             cursor = conn.cursor()
             
             cursor.execute("UPDATE api_keys SET requests_today = 0")
@@ -221,7 +221,7 @@ Example usage:
     def reset_monthly_counters(self):
         """Reset monthly request counters (run this monthly via cron)"""
         try:
-            conn = psycopg2.connect(self.database_url)
+            conn = psycopg.connect(self.database_url)
             cursor = conn.cursor()
             
             cursor.execute("UPDATE api_keys SET requests_month = 0")
@@ -238,7 +238,7 @@ Example usage:
     def get_usage_stats(self):
         """Get API usage statistics"""
         try:
-            conn = psycopg2.connect(self.database_url)
+            conn = psycopg.connect(self.database_url)
             cursor = conn.cursor()
             
             # Overall stats

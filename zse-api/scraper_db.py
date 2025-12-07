@@ -1,5 +1,5 @@
-import psycopg2
-from psycopg2.extras import Json
+import psycopg
+from psycopg.types.json import Json
 from datetime import datetime, date
 import os
 import sys
@@ -31,7 +31,7 @@ class ZSEDataPipeline:
     
     def connect(self):
         #Connect to database
-        self.conn = psycopg2.connect(self.database_url)
+        self.conn = psycopg.connect(self.database_url)
         return self.conn
     
     def close(self):

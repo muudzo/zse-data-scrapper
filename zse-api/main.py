@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 import os
 import hashlib
 
@@ -36,7 +36,7 @@ API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def get_db():
     """Get database connection"""
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
     try:
         yield conn
     finally:
