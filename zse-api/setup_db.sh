@@ -38,7 +38,7 @@ else
       --name zse-postgres \
       -e POSTGRES_PASSWORD=postgres \
       -e POSTGRES_DB=zse_db \
-      -p 5432:5432 \
+      -p 5433:5432 \
       postgres:13
     
     echo "✓ Database container created"
@@ -49,14 +49,14 @@ fi
 # Apply schema
 echo ""
 echo "Applying database schema..."
-PGPASSWORD=postgres psql -h localhost -U postgres -d zse_db -f database_schema.sql 2>&1 | grep -v "already exists" || true
+PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d zse_db -f database_schema.sql 2>&1 | grep -v "already exists" || true
 
 echo ""
 echo "=== Database Setup Complete ==="
 echo ""
 echo "Database connection details:"
 echo "  Host: localhost"
-echo "  Port: 5432"
+echo "  Port: 5433"
 echo "  Database: zse_db"
 echo "  User: postgres"
 echo "  Password: postgres"
