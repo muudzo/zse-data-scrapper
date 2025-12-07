@@ -15,21 +15,27 @@ class Security(BaseModel):
     symbol: str
     name: Optional[str] = None
     security_type: str
+    sector: Optional[str] = None
+    currency: Optional[str] = 'ZWG'
 
 class Price(BaseModel):
     symbol: str
     price: float
     change_pct: Optional[float] = None
     market_cap: Optional[float] = None
+    volume: Optional[int] = None
+    trades_count: Optional[int] = None
     trade_date: date
 
-class MarketActivity(BaseModel):
+class MarketSnapshot(BaseModel):
     trade_date: date
-    trades_count: Optional[int] = None
-    turnover: Optional[float] = None
+    total_trades: Optional[int] = None
+    total_turnover: Optional[float] = None
     market_cap: Optional[float] = None
     foreign_purchases: Optional[float] = None
     foreign_sales: Optional[float] = None
+    gainers_count: Optional[int] = None
+    losers_count: Optional[int] = None
 
 @app.get("/")
 def read_root():
@@ -39,74 +45,57 @@ def read_root():
 def get_securities():
     """Get all securities"""
     with get_db_cursor() as cur:
-        cur.execute("SELECT symbol, name, security_type FROM securities ORDER BY symbol")
+        cur.execute("""
+            SELECT symbol, name, security_type, sector, currency 
+            FROM securities 
+            WHERE is_active = true 
+            ORDER BY symbol
+        """)
         return cur.fetchall()
 
 @app.get("/prices/latest", response_model=List[Price])
 def get_latest_prices():
     """Get latest prices for all securities"""
     with get_db_cursor() as cur:
-        # Get the most recent trade date
-        cur.execute("SELECT MAX(trade_date) as max_date FROM prices")
-        res = cur.fetchone()
-        latest_date = res['max_date']
-        
-        if not latest_date:
-            return []
-
-        query = """
-            SELECT s.symbol, p.price, p.change_pct, p.market_cap, p.trade_date
-            FROM prices p
-            JOIN securities s ON p.security_id = s.id
-            WHERE p.trade_date = %s
-            ORDER BY s.symbol
-        """
-        cur.execute(query, (latest_date,))
+        cur.execute("""
+            SELECT symbol, price, change_pct, market_cap, volume, trades_count, trade_date
+            FROM v_latest_prices
+            ORDER BY symbol
+        """)
         return cur.fetchall()
 
 @app.get("/prices/history", response_model=List[Price])
 def get_price_history(
     symbol: str = Query(..., description="Security symbol"),
-    start_date: Optional[date] = None, 
-    end_date: Optional[date] = None
+    limit: int = 30
 ):
     """Get historical prices for a specific security"""
-    query = """
-        SELECT s.symbol, p.price, p.change_pct, p.market_cap, p.trade_date
-        FROM prices p
-        JOIN securities s ON p.security_id = s.id
-        WHERE s.symbol = %s
-    """
-    params = [symbol]
-    
-    if start_date:
-        query += " AND p.trade_date >= %s"
-        params.append(start_date)
-    
-    if end_date:
-        query += " AND p.trade_date <= %s"
-        params.append(end_date)
-        
-    query += " ORDER BY p.trade_date DESC"
-    
     with get_db_cursor() as cur:
-        cur.execute(query, tuple(params))
+        # Check security exists first
+        cur.execute("SELECT id FROM securities WHERE symbol = %s", (symbol,))
+        sec = cur.fetchone()
+        if not sec:
+            raise HTTPException(status_code=404, detail="Security not found")
+            
+        cur.execute("""
+            SELECT dp.trade_date, dp.price, dp.change_pct, dp.market_cap, dp.volume, dp.trades_count
+            FROM daily_prices dp
+            WHERE dp.security_id = %s
+            ORDER BY dp.trade_date DESC
+            LIMIT %s
+        """, (sec['id'], limit))
+        
         results = cur.fetchall()
-        if not results:
-            # Check if symbol exists
-            cur.execute("SELECT 1 FROM securities WHERE symbol = %s", (symbol,))
-            if not cur.fetchone():
-                raise HTTPException(status_code=404, detail="Security not found")
+        # Add symbol back to response
+        for r in results:
+            r['symbol'] = symbol
         return results
 
-@app.get("/market-activity", response_model=List[MarketActivity])
-def get_market_activity(limit: int = 10):
-    """Get recent market activity"""
+@app.get("/market-activity", response_model=List[MarketSnapshot])
+def get_market_activity():
+    """Get latest market activity summary"""
     with get_db_cursor() as cur:
         cur.execute("""
-            SELECT trade_date, trades_count, turnover, market_cap, foreign_purchases, foreign_sales
-            FROM market_activity
-            ORDER BY trade_date DESC
-            LIMIT %s
-        """, (limit,))
+            SELECT * FROM v_market_summary
+        """)
         return cur.fetchall()

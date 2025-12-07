@@ -4,7 +4,7 @@ import logging
 import sys
 from app.logging_conf import setup_logging
 from app.scraper import ZSEScraper
-from app.insert import upsert_securities, upsert_prices, upsert_market_activity
+from app.insert import upsert_securities, upsert_prices, upsert_market_activity, upsert_market_ids, log_scrape_result
 
 # Setup logging
 setup_logging()
@@ -19,6 +19,7 @@ def run_job():
         
         if not data:
             logger.warning("No data scraped. Aborting.")
+            log_scrape_result('failed', scraper.base_url, error_msg="No data returned")
             return
 
         logger.info(f"Scraped data successfully. Source: {data['source']}")
@@ -28,19 +29,25 @@ def run_job():
         logger.info("Securities upserted.")
 
         # 2. Upsert Market Activity
-        upsert_market_activity(data)
+        trade_date = upsert_market_activity(data)
         logger.info("Market activity upserted.")
+        
+        # 3. Upsert Market Indices
+        if trade_date:
+            upsert_market_ids(data, trade_date)
+            logger.info("Market indices upserted.")
 
-        # 3. Upsert Prices
+        # 4. Upsert Prices
         # Use trade date from market activity if available, else today
-        trade_date = data.get('market_activity', {}).get('trade_date')
-        upsert_prices(data, trade_date_str=trade_date)
+        upsert_prices(data, trade_date_str=data.get('market_activity', {}).get('trade_date'))
         logger.info("Prices upserted.")
         
+        log_scrape_result('success', data['source'], records=len(data), raw_data=data)
         logger.info("Job completed successfully.")
         
     except Exception as e:
         logger.error(f"Job failed: {e}", exc_info=True)
+        log_scrape_result('failed', "ZSE Homepage", error_msg=str(e))
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--now":

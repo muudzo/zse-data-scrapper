@@ -1,6 +1,7 @@
 from app.db import get_db_cursor
 from datetime import datetime
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -14,32 +15,37 @@ def upsert_securities(data):
         securities.append({
             'symbol': item['symbol'],
             'name': item.get('name', item['symbol']), # Fallback if name is missing
-            'type': 'equity'
+            'type': 'equity',
+            'currency': item.get('currency', 'ZWG')
         })
         
     for item in data.get('etfs', []):
         securities.append({
             'symbol': item['symbol'],
             'name': item.get('name', item['symbol']),
-            'type': 'etf'
+            'type': 'etf',
+            'currency': item.get('currency', 'ZWG')
         })
         
     for item in data.get('reits', []):
         securities.append({
             'symbol': item['symbol'],
             'name': item.get('name', item['symbol']),
-            'type': 'reit'
+            'type': 'reit',
+            'currency': item.get('currency', 'ZWG')
         })
 
     with get_db_cursor(commit=True) as cur:
         for security in securities:
             cur.execute("""
-                INSERT INTO securities (symbol, name, security_type)
-                VALUES (%s, %s, %s)
+                INSERT INTO securities (symbol, name, security_type, currency)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (symbol) DO UPDATE 
-                SET updated_at = NOW()
+                SET updated_at = NOW(),
+                    name = EXCLUDED.name,
+                    currency = EXCLUDED.currency
                 RETURNING id;
-            """, (security['symbol'], security['name'], security['type']))
+            """, (security['symbol'], security['name'], security['type'], security['currency']))
 
 def upsert_prices(data, trade_date_str=None):
     """Upsert daily prices"""
@@ -71,9 +77,6 @@ def upsert_prices(data, trade_date_str=None):
     process_list('etfs')
     process_list('reits')
     
-    # Note: If we had a full list of all equities, we would process that too.
-    # Currently we only catch what's on the homepage summaries.
-
     with get_db_cursor(commit=True) as cur:
         for item in price_items:
             # Get security ID
@@ -86,17 +89,31 @@ def upsert_prices(data, trade_date_str=None):
             security_id = res['id']
             
             cur.execute("""
-                INSERT INTO prices (security_id, price, change_pct, market_cap, trade_date)
+                INSERT INTO daily_prices (security_id, trade_date, price, change_pct, market_cap)
                 VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (security_id, trade_date) DO UPDATE
                 SET price = EXCLUDED.price,
                     change_pct = EXCLUDED.change_pct,
                     market_cap = EXCLUDED.market_cap,
-                    captured_at = NOW();
-            """, (security_id, item['price'], item['change_pct'], item['market_cap'], trade_date))
+                    created_at = NOW();
+            """, (security_id, trade_date, item['price'], item['change_pct'], item['market_cap']))
+
+def upsert_market_ids(data, trade_date):
+    """Upsert Market Indices"""
+    indices = data.get('market_indices', []) + data.get('sector_indices', [])
+    
+    with get_db_cursor(commit=True) as cur:
+        for idx in indices:
+            cur.execute("""
+                INSERT INTO market_indices (index_name, trade_date, index_value, change_pct, index_type)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (index_name, trade_date) DO UPDATE
+                SET index_value = EXCLUDED.index_value,
+                    change_pct = EXCLUDED.change_pct;
+            """, (idx['name'], trade_date, idx['value'], idx['change_pct'], 'market_index'))
 
 def upsert_market_activity(data):
-    """Upsert market activity"""
+    """Upsert market activity (now market_snapshots)"""
     activity = data.get('market_activity', {})
     if not activity:
         return
@@ -114,12 +131,12 @@ def upsert_market_activity(data):
 
     with get_db_cursor(commit=True) as cur:
         cur.execute("""
-            INSERT INTO market_activity 
-            (trade_date, trades_count, turnover, market_cap, foreign_purchases, foreign_sales)
+            INSERT INTO market_snapshots 
+            (trade_date, total_trades, total_turnover, market_cap, foreign_purchases, foreign_sales)
             VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (trade_date) DO UPDATE
-            SET trades_count = EXCLUDED.trades_count,
-                turnover = EXCLUDED.turnover,
+            SET total_trades = EXCLUDED.total_trades,
+                total_turnover = EXCLUDED.total_turnover,
                 market_cap = EXCLUDED.market_cap,
                 foreign_purchases = EXCLUDED.foreign_purchases,
                 foreign_sales = EXCLUDED.foreign_sales;
@@ -131,3 +148,16 @@ def upsert_market_activity(data):
             activity.get('foreign_purchases'),
             activity.get('foreign_sales')
         ))
+
+    return trade_date
+
+def log_scrape_result(status, source_url, records=0, error_msg=None, raw_data=None):
+    """Log scrape attempt to DB"""
+    try:
+        with get_db_cursor(commit=True) as cur:
+            cur.execute("""
+                INSERT INTO scrape_logs (status, source_url, records_parsed, error_message, raw_snapshot)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (status, source_url, records, error_msg, json.dumps(raw_data) if raw_data else None))
+    except Exception as e:
+        logger.error(f"Failed to write scrape log: {e}")
