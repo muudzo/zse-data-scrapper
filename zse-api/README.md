@@ -2,80 +2,75 @@
 
 A complete pipeline to scrape Zimbabwe Stock Exchange (ZSE) data, store it in PostgreSQL, and serve it via a secured FastAPI.
 
-## Setup
+## Quick Start
 
-### 1. Prerequisites
-- Docker and Docker Compose
-- Python 3.9+
-
-### 2. Start Infrastructure
-Start the PostgreSQL database and pgAdmin interface:
+### 1. Install Dependencies
 ```bash
-docker-compose up -d
-```
-- **Postgres**: localhost:5432
-- **pgAdmin**: localhost:5050 (Login: `admin@admin.com` / `admin`)
-
-### 3. Python Environment
-Create a virtual environment and install dependencies:
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+cd zse-api
+./setup.sh
 ```
 
-### 4. Database Setup
-The database schema is automatically applied by Docker on the first run. 
-If you need to re-apply it manually (e.g. after schema changes):
+### 2. Setup Database
+**Option A: Using Docker (Recommended)**
 ```bash
-psql -h localhost -U postgres -d zse_db -f database_schema.sql
+# Start Docker Desktop first, then:
+./setup_db.sh
 ```
 
-## Usage
-
-### 1. Generate API Key
-You can use the admin script to manage API keys:
+**Option B: Local PostgreSQL**
 ```bash
-# Create a new key
-python admin.py create user@example.com free
-
-# List all keys
-python admin.py list
+brew install postgresql@13
+brew services start postgresql@13
+createdb zse_db
+psql -d zse_db -f database_schema.sql
 ```
 
-### 2. Run Scraper Manually
-Trigger an immediate scrape and update:
+### 3. Run Scraper
 ```bash
-python scraper_db.py
+./run.sh
 ```
 
-### 3. Run API
-Start the FastAPI server:
+### 4. Start API Server
 ```bash
+source ../venv/bin/activate
 uvicorn main:app --reload
 ```
-- **API Docs**: http://127.0.0.1:8000/docs
-- **Authorize**: Click "Authorize" in Swagger UI and enter your API Key.
 
-#### Endpoints
-- `GET /api/v1/securities`: List securities.
-- `GET /api/v1/securities/{symbol}/prices`: Historical prices.
-- `GET /api/v1/market/summary`: Daily market stats.
-- `GET /api/v1/market/movers`: Top gainers/losers.
+Visit: http://localhost:8000/docs
 
-### 4. Scheduler
-Run the scheduler daemon:
+## API Key Management
+
+Create an API key:
 ```bash
-python scheduler.py
+source ../venv/bin/activate
+python admin.py create user@example.com free
 ```
 
-## Deployment
+## Project Structure
 
-### Railway/Heroku
-Web and Worker processes are defined in `Procfile`.
-- **Web**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-- **Worker**: `python scheduler.py`
+```
+zse-api/
+├── setup.sh          # Install dependencies
+├── setup_db.sh       # Setup database
+├── run.sh            # Run scraper
+├── scraper.py        # ZSE scraper
+├── scraper_db.py     # Database pipeline
+├── main.py           # FastAPI application
+├── admin.py          # API key management
+├── scheduler.py      # Scheduled jobs
+└── database_schema.sql
+```
 
-## Development
-- **Logs**: Check `zse_scraper.log` for details.
-- **Admin**: Use `admin.py` for key management.
+## Troubleshooting
+
+**Docker not running:**
+- Start Docker Desktop application
+- Run `./setup_db.sh` again
+
+**Database connection failed:**
+- Check if PostgreSQL is running: `docker ps`
+- Verify connection: `psql -h localhost -U postgres -d zse_db`
+
+**Module not found:**
+- Activate virtualenv: `source ../venv/bin/activate`
+- Or use the scripts: `./setup.sh` then `./run.sh`
