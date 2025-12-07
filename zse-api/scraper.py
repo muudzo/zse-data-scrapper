@@ -4,7 +4,6 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict, Optional 
-import json 
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,34 +11,20 @@ logger = logging.getLogger(__name__)
 class ZSEScraper:
     def __init__(self):
         self.base_url = "https://www.zse.co.zw"
-        self.session = requests.Session()
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Referer": "https://www.google.com/"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
         }
-        self.session.headers.update(self.headers)
         
-    def fetch_homepage(self) -> str:
-        """Fetch ZSE homepage html content with retries"""
-        import time
-        
-        max_retries = 3
-        timeout = 30  # Increased timeout
-        
-        for attempt in range(max_retries):
-            try:
-                logger.info(f"Fetching homepage (attempt {attempt + 1}/{max_retries})...")
-                response = self.session.get(self.base_url, timeout=timeout)
-                response.raise_for_status()
-                return response.text
-            except requests.exceptions.RequestException as e:
-                logger.warning(f"Attempt {attempt + 1} failed: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(2 * (attempt + 1))  # Exponential backoff
-                else:
-                    logger.error(f"Error fetching homepage after {max_retries} attempts: {e}")
-                    return None
+    def fetch_homepage(self)-> str:
+        #fetch zse homepage html content
+        try:
+            # INCREASED TIMEOUT to 30 seconds to prevent ReadTimeouts
+            response = requests.get(self.base_url, headers=self.headers, timeout=30)
+            response.raise_for_status()
+            return response.text
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching homepage: {e}")
+            return None
     
     def parse_table(self, soup: BeautifulSoup, table_identifier: str) -> List[Dict]:
         #Generic table parser - finds table by nearby heading
