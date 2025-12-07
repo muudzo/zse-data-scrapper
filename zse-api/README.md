@@ -34,7 +34,15 @@ psql -h localhost -U postgres -d zse_db -f schema.sql
 ## Usage
 
 ### 1. Generate API Key
-Since the API is now secured, you need an API key. Run this helper script to generate a test key (`test_key_123`):
+You can use the admin script to manage API keys:
+```bash
+# Create a new key
+python admin.py create user@example.com free
+
+# List all keys
+python admin.py list
+```
+**Old method (dev only):**
 ```bash
 python -m app.seed_key
 ```
