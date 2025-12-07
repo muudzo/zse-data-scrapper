@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+requests
+beautifulsoup4
+psycopg2-binary
+python-dotenv
+pydantic
+pydantic-settings
+sqlalchemy
+alembic
+schedule
