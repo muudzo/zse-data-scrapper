@@ -1,28 +1,35 @@
 import os
 import time
+import logging
+from contextlib import contextmanager
+from typing import Generator
 import psycopg
 from psycopg.rows import dict_row
-from contextlib import contextmanager
-import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_db_connection():
+# Use environment variables correctly
+# Construct DATABASE_URL if not provided, or separate params
+DB_USER = os.getenv("POSTGRES_USER", "postgres")
+DB_PASS = os.getenv("POSTGRES_PASSWORD", "postgres")
+DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
+DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+DB_NAME = os.getenv("POSTGRES_DB", "zse_db")
+
+DEFAULT_DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+
+def get_db_connection(conn_str: str = DATABASE_URL) -> psycopg.Connection:
     """Create a database connection with retries"""
-    max_retries = 5
-    retry_delay = 2
+    max_retries = 3
+    retry_delay = 1
     
     for attempt in range(max_retries):
         try:
-            conn = psycopg.connect(
-                host=os.getenv("POSTGRES_HOST", "localhost"),
-                database=os.getenv("POSTGRES_DB", "zse_db"),
-                user=os.getenv("POSTGRES_USER", "postgres"),
-                password=os.getenv("POSTGRES_PASSWORD", "postgres"),
-                port=os.getenv("POSTGRES_PORT", "5432")
-            )
+            # Usage of row_factory=dict_row enables accessing columns by name
+            conn = psycopg.connect(conn_str, row_factory=dict_row, autocommit=False)
             return conn
         except psycopg.OperationalError as e:
             if attempt < max_retries - 1:
@@ -33,11 +40,14 @@ def get_db_connection():
                 raise e
 
 @contextmanager
-def get_db_cursor(commit=False):
-    """Context manager for database cursor"""
+def get_db_cursor(commit: bool = False) -> Generator[psycopg.Cursor, None, None]:
+    """
+    Context manager for database cursor.
+    Handles connection open/close and transaction commit/rollback.
+    """
     conn = get_db_connection()
     try:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         yield cur
         if commit:
             conn.commit()
@@ -45,5 +55,4 @@ def get_db_cursor(commit=False):
         conn.rollback()
         raise e
     finally:
-        cur.close()
         conn.close()
