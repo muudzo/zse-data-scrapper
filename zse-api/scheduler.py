@@ -1,29 +1,20 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
-from scraper_db import ZSEDataPipeline
-import os
+from etl import ZSEDataPipeline
 import logging
+import signal
+import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load env if needed
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
 def scrape_job():
-    logger.info("Running scheduled scrape...")
-    if not DATABASE_URL:
-        logger.error("DATABASE_URL not set")
-        return
-        
-    pipeline = ZSEDataPipeline(DATABASE_URL)
-    pipeline.run()
+    try:
+        logger.info("Starting scheduled scrape job...")
+        pipeline = ZSEDataPipeline()
+        pipeline.run()
+    except Exception as e:
+        logger.error(f"Scheduled job failed: {e}")
 
 if __name__ == "__main__":
     scheduler = BlockingScheduler()
@@ -31,7 +22,16 @@ if __name__ == "__main__":
     # Run every weekday at 15:30 (3:30 PM)
     scheduler.add_job(scrape_job, 'cron', day_of_week='mon-fri', hour=15, minute=30, timezone='Africa/Harare')
     
-    logger.info("Scheduler started. Waiting for jobs...")
+    logger.info("Scheduler started. Waiting for jobs (Mon-Fri 15:30)...")
+    
+    def signal_handler(sig, frame):
+        logger.info("Shutting down scheduler...")
+        scheduler.shutdown()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
