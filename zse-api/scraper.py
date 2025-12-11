@@ -74,33 +74,35 @@ class ZSEScraper:
         except ValueError:
             return None
 
-    def scrape_top_gainers(self, soup: BeautifulSoup) -> List[Dict]:
-        #Scrape top gainers table
-        gainers = self.parse_table(soup, "TOP GAINERS")
-        
-        result = []
-        for item in gainers:
-            result.append({
-                'symbol': item.get('SYMBOL', '').replace('.zw', ''),
-                'price': self.clean_numeric(item.get('VALUE (ZWG cents)', '')),
+    def _parse_security_table(self, soup: BeautifulSoup, identifier: str, security_type: str = 'equity') -> List[Dict]:
+        """Generic helper to parse security tables"""
+        rows = self.parse_table(soup, identifier)
+        results = []
+        for item in rows:
+            # Normalize keys which can vary slightly
+            price_key = next((k for k in item.keys() if 'VALUE' in k or 'PRICE' in k), None)
+            
+            if not price_key: 
+                continue
+
+            data = {
+                'symbol': item.get('SYMBOL', item.get('SECURITY', '')).replace('.zw', ''),
+                'price': self.clean_numeric(item.get(price_key, '')),
                 'change_pct': self.clean_numeric(item.get('CHANGE', '')),
                 'currency': 'ZWG'
-            })
-        return result
+            }
+            
+            if security_type in ['etf', 'reit']:
+                data['market_cap'] = self.clean_numeric(item.get('MARKET CAP (ZWG)', ''))
+                
+            results.append(data)
+        return results
+
+    def scrape_top_gainers(self, soup: BeautifulSoup) -> List[Dict]:
+        return self._parse_security_table(soup, "TOP GAINERS")
     
     def scrape_top_losers(self, soup: BeautifulSoup) -> List[Dict]:
-        #Scrape top losers table
-        losers = self.parse_table(soup, "TOP LOSERS")
-        
-        result = []
-        for item in losers:
-            result.append({
-                'symbol': item.get('SYMBOL', '').replace('.zw', ''),
-                'price': self.clean_numeric(item.get('VALUE (ZWG Cents)', '')),
-                'change_pct': self.clean_numeric(item.get('CHANGE', '')),
-                'currency': 'ZWG'
-            })
-        return result
+        return self._parse_security_table(soup, "TOP LOSERS")
     
     def scrape_market_indices(self, soup: BeautifulSoup) -> List[Dict]:
         #Scrape market cap indices
@@ -129,34 +131,10 @@ class ZSEScraper:
         return result
 
     def scrape_etfs(self, soup: BeautifulSoup) -> List[Dict]:
-        #Scrape Exchange Traded Funds
-        etfs = self.parse_table(soup, "EXCHANGE TRADED FUNDS")
-        
-        result = []
-        for item in etfs:
-            result.append({
-                'symbol': item.get('SECURITY', '').replace('.zw', ''),
-                'price': self.clean_numeric(item.get('PRICE (ZWG Cents)', '')),
-                'change_pct': self.clean_numeric(item.get('CHANGE', '')),
-                'market_cap': self.clean_numeric(item.get('MARKET CAP (ZWG)', '')),
-                'currency': 'ZWG'
-            })
-        return result
+        return self._parse_security_table(soup, "EXCHANGE TRADED FUNDS", 'etf')
     
     def scrape_reits(self, soup: BeautifulSoup) -> List[Dict]:
-        #Scrape Real Estate Investment Trusts
-        reits = self.parse_table(soup, "REAL ESTATE INVESTMENT TRUST")
-        
-        result = []
-        for item in reits:
-            result.append({
-                'symbol': item.get('SECURITY', '').replace('.zw', ''),
-                'price': self.clean_numeric(item.get('PRICE (ZWG Cents)', '')),
-                'change_pct': self.clean_numeric(item.get('CHANGE', '')),
-                'market_cap': self.clean_numeric(item.get('MARKET CAP (ZWG)', '')),
-                'currency': 'ZWG'
-            })
-        return result
+        return self._parse_security_table(soup, "REAL ESTATE INVESTMENT TRUST", 'reit')
     
     def scrape_market_activity(self, soup: BeautifulSoup) -> Dict:
         #Scrape market activity summary
