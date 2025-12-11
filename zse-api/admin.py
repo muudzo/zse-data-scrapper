@@ -3,28 +3,13 @@ ZSE API - Admin Key Management Script
 Generate and manage API keys
 """
 
-import psycopg
 import hashlib
 import secrets
-import os
 import sys
 from datetime import datetime
-
-# Try to load .env file if available
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
-# Use defaults matching our docker-compose setup if env vars missing
-DEFAULT_DB_URL = "postgresql://postgres:postgres@localhost/zse_db"
-DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
+from repository import ApiKeyRepository
 
 class APIKeyManager:
-    def __init__(self, database_url: str):
-        self.database_url = database_url
-    
     def generate_key(self) -> str:
         """Generate a secure random API key"""
         return f"zse_{secrets.token_urlsafe(32)}"
@@ -53,27 +38,8 @@ class APIKeyManager:
         key_hash = self.hash_key(api_key)
         key_prefix = api_key[:8]
         
-        # Store in database
         try:
-            conn = psycopg.connect(self.database_url)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                INSERT INTO api_keys 
-                    (key_hash, key_prefix, user_email, tier, daily_limit, monthly_limit)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (
-                key_hash,
-                key_prefix,
-                email,
-                tier,
-                limits['daily'],
-                limits['monthly']
-            ))
-            
-            key_id = cursor.fetchone()[0]
-            conn.commit()
+            key_id = ApiKeyRepository.create(key_hash, key_prefix, email, tier, limits)
             
             print(f"""
 ╔══════════════════════════════════════════════════════════════╗
@@ -95,8 +61,6 @@ Example usage:
   curl -H "X-API-Key: {api_key}" \\
        http://localhost:8000/api/v1/securities
             """)
-            
-            conn.close()
             return api_key
             
         except Exception as e:
@@ -106,27 +70,7 @@ Example usage:
     def list_keys(self):
         """List all API keys"""
         try:
-            conn = psycopg.connect(self.database_url)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT 
-                    id,
-                    key_prefix,
-                    user_email,
-                    tier,
-                    requests_today,
-                    daily_limit,
-                    requests_month,
-                    monthly_limit,
-                    is_active,
-                    created_at,
-                    last_used_at
-                FROM api_keys
-                ORDER BY created_at DESC
-            """)
-            
-            keys = cursor.fetchall()
+            keys = ApiKeyRepository.list_all()
             
             if not keys:
                 print("No API keys found.")
@@ -136,7 +80,19 @@ Example usage:
             print("=" * 120)
             
             for key in keys:
-                key_id, prefix, email, tier, req_today, daily_lim, req_month, monthly_lim, active, created, last_used = key
+                # key is a DictRow, so access by key
+                # It might be a dict or tuple depending on how psycopg returns it.
+                # Our repository uses RealDictRow via dict_row factory, so it returns dicts.
+                
+                key_id = key['id']
+                prefix = key['key_prefix']
+                email = key['user_email']
+                tier = key['tier']
+                req_today = key['requests_today']
+                daily_lim = key['daily_limit']
+                active = key['is_active']
+                created = key['created_at']
+                last_used = key['last_used_at']
                 
                 usage_today = f"{req_today}/{daily_lim}"
                 active_str = "✓" if active else "✗"
@@ -144,144 +100,73 @@ Example usage:
                 
                 print(f"{key_id:<5} {prefix:<12} {email:<30} {tier:<12} {usage_today:<10} {active_str:<8} {last_used_str:<20}")
             
-            conn.close()
-            
         except Exception as e:
             print(f"Error listing keys: {e}")
     
     def deactivate_key(self, key_id: int):
         """Deactivate an API key"""
         try:
-            conn = psycopg.connect(self.database_url)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                UPDATE api_keys 
-                SET is_active = false
-                WHERE id = %s
-                RETURNING user_email
-            """, (key_id,))
-            
-            result = cursor.fetchone()
-            
-            if result:
-                print(f"✓ API key #{key_id} for {result[0]} has been deactivated.")
-                conn.commit()
+            email = ApiKeyRepository.set_active_status(key_id, False)
+            if email:
+                print(f"✓ API key #{key_id} for {email} has been deactivated.")
             else:
                 print(f"✗ API key #{key_id} not found.")
-            
-            conn.close()
-            
         except Exception as e:
             print(f"Error deactivating key: {e}")
     
     def reactivate_key(self, key_id: int):
         """Reactivate an API key"""
         try:
-            conn = psycopg.connect(self.database_url)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                UPDATE api_keys 
-                SET is_active = true
-                WHERE id = %s
-                RETURNING user_email
-            """, (key_id,))
-            
-            result = cursor.fetchone()
-            
-            if result:
-                print(f"✓ API key #{key_id} for {result[0]} has been reactivated.")
-                conn.commit()
+            email = ApiKeyRepository.set_active_status(key_id, True)
+            if email:
+                print(f"✓ API key #{key_id} for {email} has been reactivated.")
             else:
                 print(f"✗ API key #{key_id} not found.")
-            
-            conn.close()
-            
         except Exception as e:
             print(f"Error reactivating key: {e}")
     
     def reset_daily_counters(self):
         """Reset daily request counters (run this daily via cron)"""
         try:
-            conn = psycopg.connect(self.database_url)
-            cursor = conn.cursor()
-            
-            cursor.execute("UPDATE api_keys SET requests_today = 0")
-            affected = cursor.rowcount
-            conn.commit()
-            
+            affected = ApiKeyRepository.reset_counters('daily')
             print(f"✓ Reset daily counters for {affected} API keys.")
-            
-            conn.close()
-            
         except Exception as e:
             print(f"Error resetting counters: {e}")
     
     def reset_monthly_counters(self):
         """Reset monthly request counters (run this monthly via cron)"""
         try:
-            conn = psycopg.connect(self.database_url)
-            cursor = conn.cursor()
-            
-            cursor.execute("UPDATE api_keys SET requests_month = 0")
-            affected = cursor.rowcount
-            conn.commit()
-            
+            affected = ApiKeyRepository.reset_counters('monthly')
             print(f"✓ Reset monthly counters for {affected} API keys.")
-            
-            conn.close()
-            
         except Exception as e:
             print(f"Error resetting counters: {e}")
     
     def get_usage_stats(self):
         """Get API usage statistics"""
         try:
-            conn = psycopg.connect(self.database_url)
-            cursor = conn.cursor()
+            stats = ApiKeyRepository.get_stats()
+            overall = stats['overall']
+            top_users = stats['top_users']
             
-            # Overall stats
-            cursor.execute("""
-                SELECT 
-                    COUNT(*) as total_keys,
-                    COUNT(CASE WHEN is_active THEN 1 END) as active_keys,
-                    SUM(requests_today) as total_requests_today,
-                    SUM(requests_month) as total_requests_month
-                FROM api_keys
-            """)
-            
-            stats = cursor.fetchone()
+            # overall is {total_keys, active_keys, ...}
             
             print(f"""
 ╔══════════════════════════════════════════════════════════════╗
 ║                     API USAGE STATISTICS                      ║
 ╠══════════════════════════════════════════════════════════════╣
-║ Total API Keys:        {stats[0]:<40} ║
-║ Active Keys:           {stats[1]:<40} ║
-║ Requests Today:        {stats[2] or 0:<40} ║
-║ Requests This Month:   {stats[3] or 0:<40} ║
+║ Total API Keys:        {overall['total_keys']:<40} ║
+║ Active Keys:           {overall['active_keys']:<40} ║
+║ Requests Today:        {overall['total_requests_today'] or 0:<40} ║
+║ Requests This Month:   {overall['total_requests_month'] or 0:<40} ║
 ╚══════════════════════════════════════════════════════════════╝
             """)
-            
-            # Top users today
-            cursor.execute("""
-                SELECT user_email, requests_today
-                FROM api_keys
-                WHERE requests_today > 0
-                ORDER BY requests_today DESC
-                LIMIT 5
-            """)
-            
-            top_users = cursor.fetchall()
             
             if top_users:
                 print("\nTop Users Today:")
                 print("-" * 60)
-                for email, requests in top_users:
-                    print(f"  {email:<40} {requests:>8} requests")
-            
-            conn.close()
+                for user in top_users:
+                    # user is dict
+                    print(f"  {user['user_email']:<40} {user['requests_today']:>8} requests")
             
         except Exception as e:
             print(f"Error getting stats: {e}")
@@ -290,7 +175,7 @@ Example usage:
 def main():
     """CLI interface"""
     
-    manager = APIKeyManager(DATABASE_URL)
+    manager = APIKeyManager()
     
     if len(sys.argv) < 2:
         print("""
